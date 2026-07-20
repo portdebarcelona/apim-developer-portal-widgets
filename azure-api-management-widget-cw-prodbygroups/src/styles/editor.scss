@@ -1,0 +1,34 @@
+@import "reboot.scss";
+
+@font-face {
+  font-family: "OpenSans";
+  src: url("fonts/OpenSans-Light.ttf");
+  src: url("fonts/OpenSans-Light.ttf") format("truetype");
+}
+
+body {
+  font-family: "OpenSans", sans-serif;
+  font-weight: 500;
+  list-style: none;
+  user-select: none;
+  font-size: 13px;
+}
+
+.editor-panel {
+  margin: 0;
+  padding: 12px;
+  border-left: 4px solid #20abd4;
+  background: #effbff;
+  color: #1f2937;
+}
+
+.editor-panel h1 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.editor-panel p {
+  margin: 0;
+  line-height: 1.45;
+}
