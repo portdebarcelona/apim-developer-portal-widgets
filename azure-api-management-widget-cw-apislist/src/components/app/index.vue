@@ -131,13 +131,13 @@
             </div>
 
             <div class="card-actions">
-              <button class="nav-btn nav-btn-custom" type="button" @click="openApi(selectedApi(api).name, 'custom-api-details')">
+              <button class="nav-btn nav-btn-custom" type="button" @click="openApi(selectedApi(api).name, 'custom-api-details', selectedApi(api).apiVersion)">
                 Scalar
               </button>
-              <button class="nav-btn nav-btn-default" type="button" @click="openApi(selectedApi(api).name, 'api-details')">
+              <button class="nav-btn nav-btn-default" type="button" @click="openApi(selectedApi(api).name, 'api-details', selectedApi(api).apiVersion)">
                 APIM
               </button>
-              <button class="nav-btn nav-btn-swagger" type="button" @click="openApi(selectedApi(api).name, 'custom-apis-swagger')">
+              <button class="nav-btn nav-btn-swagger" type="button" @click="openApi(selectedApi(api).name, 'custom-apis-swagger', selectedApi(api).apiVersion)">
                 Swagger
               </button>
             </div>
@@ -182,13 +182,13 @@
 
                   <td class="action-cell">
                     <div class="action-buttons">
-                      <button class="nav-btn nav-btn-custom" type="button" @click="openApi(selectedApi(api).name, 'custom-api-details')">
+                      <button class="nav-btn nav-btn-custom" type="button" @click="openApi(selectedApi(api).name, 'custom-api-details', selectedApi(api).apiVersion)">
                         Scalar
                       </button>
-                      <button class="nav-btn nav-btn-default" type="button" @click="openApi(selectedApi(api).name, 'api-details')">
+                      <button class="nav-btn nav-btn-default" type="button" @click="openApi(selectedApi(api).name, 'api-details', selectedApi(api).apiVersion)">
                         APIM
                       </button>
-                      <button class="nav-btn nav-btn-swagger" type="button" @click="openApi(selectedApi(api).name, 'custom-apis-swagger')">
+                      <button class="nav-btn nav-btn-swagger" type="button" @click="openApi(selectedApi(api).name, 'custom-apis-swagger', selectedApi(api).apiVersion)">
                         Swagger
                       </button>
                     </div>
@@ -251,7 +251,14 @@
 
 <script setup lang="ts">
 import {computed, inject, nextTick, onMounted, onUnmounted, ref, watch} from "vue"
-import type {ApiGroup, ApiItem, ApimApiListResponse, ApimApiRaw, RequestFn, ViewMode} from "../../types"
+import {
+  ApimClient,
+  compareApiVersions,
+  formatVersionLabel,
+  groupApisByVersion,
+  mapApi,
+} from "@portdebarcelona/apim-core"
+import type {ApiGroup, ApiItem, ViewMode} from "../../types"
 import {openApi} from "../../utils/navigation"
 import {injectParentStyles} from "../../utils/parentStyles"
 import {resizeWidget} from "../../utils/resizeWidget"
@@ -259,7 +266,7 @@ import {sanitizeHtml} from "../../utils/sanitizeHtml"
 
 const PAGE_SIZE = 6
 
-const requestPromise = inject<Promise<RequestFn>>("requestPromise")
+const clientPromise = inject<Promise<ApimClient>>("clientPromise")
 
 const apis = ref<ApiItem[]>([])
 const loading = ref(true)
@@ -271,28 +278,7 @@ const selectedVersionIds = ref<Record<string, string>>({})
 let resizeObserver: ResizeObserver | null = null
 
 const apiGroups = computed<ApiGroup[]>(() => {
-  const groups = new Map<string, ApiGroup>()
-
-  apis.value.forEach((api) => {
-    const id = api.displayName.trim().toLocaleLowerCase("es") || api.name
-    const group = groups.get(id)
-
-    if (group) {
-      group.versions.push(api)
-      return
-    }
-
-    groups.set(id, {
-      id,
-      displayName: api.displayName,
-      versions: [api],
-    })
-  })
-
-  return Array.from(groups.values()).map((group) => ({
-    ...group,
-    versions: group.versions.slice().sort(compareVersions),
-  }))
+  return groupApisByVersion(apis.value)
 })
 
 const filteredApis = computed(() => {
@@ -331,28 +317,6 @@ const paginationEnd = computed(() =>
   Math.min(currentPage.value * PAGE_SIZE, filteredApis.value.length),
 )
 
-function mapApi(api: ApimApiRaw): ApiItem {
-  const properties = api.properties || {}
-
-  return {
-    id: api.id || api.name,
-    name: api.name,
-    displayName: properties.displayName || api.name,
-    description: properties.description || "",
-    apiVersion: properties.apiVersion || "",
-  }
-}
-
-function compareVersions(a: ApiItem, b: ApiItem): number {
-  const aVersion = a.apiVersion || a.name
-  const bVersion = b.apiVersion || b.name
-
-  return aVersion.localeCompare(bVersion, "es", {
-    numeric: true,
-    sensitivity: "base",
-  })
-}
-
 function syncSelectedVersions(): void {
   const nextSelected = {...selectedVersionIds.value}
 
@@ -370,15 +334,11 @@ function selectedApi(group: ApiGroup): ApiItem {
 }
 
 function getLatestApiVersion(versions: ApiItem[]): ApiItem | undefined {
-  return versions.slice().sort((a, b) => compareVersions(b, a))[0]
+  return versions.slice().sort((a, b) => compareApiVersions(b, a))[0]
 }
 
 function getVersionLabel(api: ApiItem): string {
-  if (!api.apiVersion) {
-    return "Versión base"
-  }
-
-  return api.apiVersion.trim().toLowerCase().startsWith("v") ? api.apiVersion : `v${api.apiVersion}`
+  return formatVersionLabel(api)
 }
 
 function refreshLayout(): void {
@@ -416,45 +376,16 @@ function shouldShowEllipsis(page: number): boolean {
   return page === currentPage.value - 2 || page === currentPage.value + 2
 }
 
-async function collectApiPages(
-  request: RequestFn,
-  firstPage: ApimApiListResponse,
-): Promise<ApimApiRaw[]> {
-  const items = [...(firstPage.value || [])]
-  let nextLink = firstPage.nextLink
-
-  while (nextLink) {
-    const response = await request(nextLink)
-    if (!response.ok) {
-      throw new Error(`Error al obtener la siguiente página de APIs: ${response.status}`)
-    }
-
-    const page = await response.json() as ApimApiListResponse
-    items.push(...(page.value || []))
-    nextLink = page.nextLink
-  }
-
-  return items
-}
-
 async function loadApis(): Promise<void> {
-  if (!requestPromise) {
+  if (!clientPromise) {
     error.value = "Error: no se pudo inicializar el contexto de APIM"
     loading.value = false
     return
   }
 
   try {
-    const request = await requestPromise
-    const response = await request("/apis")
-
-    if (!response.ok) {
-      error.value = `Error al obtener APIs: ${response.status}`
-      return
-    }
-
-    const json = await response.json() as ApimApiListResponse
-    const items = (await collectApiPages(request, json)).map(mapApi)
+    const client = await clientPromise
+    const items = (await client.listApis()).map(mapApi)
 
     items.sort((a, b) =>
       a.displayName.localeCompare(b.displayName, "es", {sensitivity: "base"}),

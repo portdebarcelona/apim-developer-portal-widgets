@@ -120,9 +120,9 @@
                   <span v-else-if="shouldShowVersion(api)" class="item-version-label">{{ getVersionLabel(selectedApiVersion(api)) }}</span>
                 </div>
                 <div class="item-actions">
-                  <button class="nav-btn nav-btn-custom" type="button" @click="openApi(selectedApiVersion(api).name, 'custom-api-details')">Scalar</button>
-                  <button class="nav-btn nav-btn-default" type="button" @click="openApi(selectedApiVersion(api).name, 'api-details')">APIM</button>
-                  <button class="nav-btn nav-btn-swagger" type="button" @click="openApi(selectedApiVersion(api).name, 'custom-apis-swagger')">Swagger</button>
+                  <button class="nav-btn nav-btn-custom" type="button" @click="openApi(selectedApiVersion(api).name, 'custom-api-details', selectedApiVersion(api).label)">Scalar</button>
+                  <button class="nav-btn nav-btn-default" type="button" @click="openApi(selectedApiVersion(api).name, 'api-details', selectedApiVersion(api).label)">APIM</button>
+                  <button class="nav-btn nav-btn-swagger" type="button" @click="openApi(selectedApiVersion(api).name, 'custom-apis-swagger', selectedApiVersion(api).label)">Swagger</button>
                 </div>
               </div>
             </div>
@@ -179,9 +179,9 @@
                           </select>
                           <span v-else-if="shouldShowVersion(api)" class="item-version-label">{{ getVersionLabel(selectedApiVersion(api)) }}</span>
                           <div class="item-actions">
-                            <button class="nav-btn nav-btn-custom" type="button" @click.stop="openApi(selectedApiVersion(api).name, 'custom-api-details')">Scalar</button>
-                            <button class="nav-btn nav-btn-default" type="button" @click.stop="openApi(selectedApiVersion(api).name, 'api-details')">APIM</button>
-                            <button class="nav-btn nav-btn-swagger" type="button" @click.stop="openApi(selectedApiVersion(api).name, 'custom-apis-swagger')">Swagger</button>
+                            <button class="nav-btn nav-btn-custom" type="button" @click.stop="openApi(selectedApiVersion(api).name, 'custom-api-details', selectedApiVersion(api).label)">Scalar</button>
+                            <button class="nav-btn nav-btn-default" type="button" @click.stop="openApi(selectedApiVersion(api).name, 'api-details', selectedApiVersion(api).label)">APIM</button>
+                            <button class="nav-btn nav-btn-swagger" type="button" @click.stop="openApi(selectedApiVersion(api).name, 'custom-apis-swagger', selectedApiVersion(api).label)">Swagger</button>
                           </div>
                         </div>
                       </div>
@@ -222,15 +222,13 @@
 
 <script setup lang="ts">
 import {computed, inject, nextTick, onMounted, onUnmounted, ref, watch} from "vue"
+import {ApimClient} from "@portdebarcelona/apim-core"
 import type {
   ApimApiRaw,
-  ApimListResponse,
-  ApimTagRaw,
   ApplicationApiItem,
   ApplicationApiVersion,
   ApplicationGroups,
   ApplicationGroupRow,
-  RequestFn,
   ViewMode,
 } from "../../types"
 import {openApi} from "../../utils/navigation"
@@ -242,7 +240,7 @@ const CACHE_TTL = 5 * 60 * 1000
 const CONCURRENCY = 30
 const PAGE_SIZE = 6
 
-const requestPromise = inject<Promise<RequestFn>>("requestPromise")
+const clientPromise = inject<Promise<ApimClient>>("clientPromise")
 
 const groups = ref<ApplicationGroups>({})
 const loading = ref(true)
@@ -468,27 +466,6 @@ async function runWithConcurrency<T>(
   await Promise.all(workers)
 }
 
-async function collectPages<T>(
-  request: RequestFn,
-  firstPage: ApimListResponse<T>,
-): Promise<T[]> {
-  const items = [...(firstPage.value || [])]
-  let nextLink = firstPage.nextLink
-
-  while (nextLink) {
-    const response = await request(nextLink)
-    if (!response.ok) {
-      throw new Error(`Error al obtener la siguiente página: ${response.status}`)
-    }
-
-    const page = await response.json() as ApimListResponse<T>
-    items.push(...(page.value || []))
-    nextLink = page.nextLink
-  }
-
-  return items
-}
-
 function readCache(): ApplicationGroups | null {
   try {
     const cached = sessionStorage.getItem(CACHE_KEY)
@@ -518,15 +495,9 @@ function writeCache(nextGroups: ApplicationGroups): void {
   }
 }
 
-async function loadTagsForApi(request: RequestFn, api: ApimApiRaw): Promise<string[]> {
+async function loadTagsForApi(client: ApimClient, api: ApimApiRaw): Promise<string[]> {
   try {
-    const response = await request(`/apis/${encodeURIComponent(api.name)}/tags`)
-    if (!response.ok) {
-      return []
-    }
-
-    const json = await response.json() as ApimListResponse<ApimTagRaw>
-    const tags = await collectPages(request, json)
+    const tags = await client.listApiTags(api.name)
 
     return tags
       .map((tag) => tag.properties?.displayName || tag.name || "")
@@ -549,27 +520,19 @@ async function loadApis(): Promise<void> {
     return
   }
 
-  if (!requestPromise) {
+  if (!clientPromise) {
     error.value = "Error: no se pudo inicializar el contexto de APIM"
     loading.value = false
     return
   }
 
   try {
-    const request = await requestPromise
-    const response = await request("/apis")
-
-    if (!response.ok) {
-      error.value = `Error al obtener APIs: ${response.status}`
-      return
-    }
-
-    const json = await response.json() as ApimListResponse<ApimApiRaw>
-    const allApis = await collectPages(request, json)
+    const client = await clientPromise
+    const allApis = await client.listApis()
     const groupsMap: Record<string, Map<string, ApplicationApiItem>> = {}
 
     await runWithConcurrency(allApis, CONCURRENCY, async (api) => {
-      const appNames = await loadTagsForApi(request, api)
+      const appNames = await loadTagsForApi(client, api)
       const groupKey = getApiGroupKey(api)
       const displayName = getApiDisplayName(api)
       const version = getApiVersion(api)

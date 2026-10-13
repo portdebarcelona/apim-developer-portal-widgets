@@ -156,9 +156,9 @@
                   {{ getVersionLabel(selectedApi(api)) }}
                 </span>
                 <div class="item-actions">
-                  <button class="nav-btn nav-btn-custom" type="button" @click.stop="openApi(selectedApi(api).name, 'custom-api-details')">Scalar</button>
-                  <button class="nav-btn nav-btn-default" type="button" @click.stop="openApi(selectedApi(api).name, 'api-details')">APIM</button>
-                  <button class="nav-btn nav-btn-swagger" type="button" @click.stop="openApi(selectedApi(api).name, 'custom-apis-swagger')">Swagger</button>
+                  <button class="nav-btn nav-btn-custom" type="button" @click.stop="openApi(selectedApi(api).name, 'custom-api-details', selectedApi(api).apiVersion)">Scalar</button>
+                  <button class="nav-btn nav-btn-default" type="button" @click.stop="openApi(selectedApi(api).name, 'api-details', selectedApi(api).apiVersion)">APIM</button>
+                  <button class="nav-btn nav-btn-swagger" type="button" @click.stop="openApi(selectedApi(api).name, 'custom-apis-swagger', selectedApi(api).apiVersion)">Swagger</button>
                 </div>
               </div>
             </div>
@@ -229,9 +229,9 @@
                             {{ getVersionLabel(selectedApi(api)) }}
                           </span>
                           <div class="item-actions">
-                            <button class="nav-btn nav-btn-custom" type="button" @click.stop="openApi(selectedApi(api).name, 'custom-api-details')">Scalar</button>
-                            <button class="nav-btn nav-btn-default" type="button" @click.stop="openApi(selectedApi(api).name, 'api-details')">APIM</button>
-                            <button class="nav-btn nav-btn-swagger" type="button" @click.stop="openApi(selectedApi(api).name, 'custom-apis-swagger')">Swagger</button>
+                            <button class="nav-btn nav-btn-custom" type="button" @click.stop="openApi(selectedApi(api).name, 'custom-api-details', selectedApi(api).apiVersion)">Scalar</button>
+                            <button class="nav-btn nav-btn-default" type="button" @click.stop="openApi(selectedApi(api).name, 'api-details', selectedApi(api).apiVersion)">APIM</button>
+                            <button class="nav-btn nav-btn-swagger" type="button" @click.stop="openApi(selectedApi(api).name, 'custom-apis-swagger', selectedApi(api).apiVersion)">Swagger</button>
                           </div>
                         </div>
                       </div>
@@ -281,17 +281,20 @@
 
 <script setup lang="ts">
 import {computed, inject, nextTick, onMounted, onUnmounted, ref, watch} from "vue"
+import {
+  ApimClient,
+  compareApiVersions,
+  formatVersionLabel,
+  getSubscribedProductNames,
+  groupApisByVersion,
+  mapApi,
+} from "@portdebarcelona/apim-core"
 import type {
   ApiGroup,
   ApiItem,
-  ApimApiListResponse,
-  ApimApiRaw,
-  ApimProductListResponse,
   ApimProductRaw,
-  ApimSubscriptionListResponse,
   ApimWidgetSecrets,
   ProductItem,
-  RequestFn,
   ViewMode,
 } from "../../types"
 import {openApi} from "../../utils/navigation"
@@ -301,7 +304,7 @@ import {resizeWidget} from "../../utils/resizeWidget"
 const PAGE_SIZE = 6
 
 const secretsPromise = inject<Promise<ApimWidgetSecrets>>("secretsPromise")
-const requestPromise = inject<Promise<RequestFn>>("requestPromise")
+const clientPromise = inject<Promise<ApimClient>>("clientPromise")
 
 const products = ref<ProductItem[]>([])
 const loading = ref(true)
@@ -417,61 +420,6 @@ function shouldShowEllipsis(page: number): boolean {
   return page === currentPage.value - 2 || page === currentPage.value + 2
 }
 
-function mapApi(api: ApimApiRaw): ApiItem {
-  const properties = api.properties || {}
-
-  return {
-    id: api.id || api.name,
-    name: api.name,
-    displayName: properties.displayName || api.name,
-    description: properties.description || "",
-    apiVersion: properties.apiVersion || "",
-  }
-}
-
-function getApiGroupId(api: ApiItem): string {
-  return api.displayName.trim().toLocaleLowerCase("es") || api.name
-}
-
-function compareVersions(a: ApiItem, b: ApiItem): number {
-  const aVersion = a.apiVersion || a.name
-  const bVersion = b.apiVersion || b.name
-
-  return aVersion.localeCompare(bVersion, "es", {
-    numeric: true,
-    sensitivity: "base",
-  })
-}
-
-function groupApisByVersion(apis: ApiItem[]): ApiGroup[] {
-  const groups = new Map<string, ApiGroup>()
-
-  apis.forEach((api) => {
-    const id = getApiGroupId(api)
-    const group = groups.get(id)
-
-    if (group) {
-      group.versions.push(api)
-      return
-    }
-
-    groups.set(id, {
-      id,
-      displayName: api.displayName,
-      versions: [api],
-    })
-  })
-
-  return Array.from(groups.values())
-    .map((group) => ({
-      ...group,
-      versions: group.versions.slice().sort(compareVersions),
-    }))
-    .sort((a, b) =>
-      a.displayName.localeCompare(b.displayName, "es", {sensitivity: "base"}),
-    )
-}
-
 function syncSelectedApiVersions(apiGroups: ApiGroup[]): void {
   const nextSelected = {...selectedApiVersionIds.value}
 
@@ -489,79 +437,30 @@ function selectedApi(group: ApiGroup): ApiItem {
 }
 
 function getLatestApiVersion(versions: ApiItem[]): ApiItem | undefined {
-  return versions.slice().sort((a, b) => compareVersions(b, a))[0]
+  return versions.slice().sort((a, b) => compareApiVersions(b, a))[0]
 }
 
 function getVersionLabel(api: ApiItem): string {
-  if (!api.apiVersion) {
-    return "v1"
-  }
-
-  return api.apiVersion.trim().toLowerCase().startsWith("v") ? api.apiVersion : `v${api.apiVersion}`
+  const label = formatVersionLabel(api)
+  return label === "Versión base" ? "v1" : label
 }
 
 function refreshLayout(): void {
   nextTick(resizeWidget)
 }
 
-async function collectPages<T>(
-  request: RequestFn,
-  firstPage: {value?: T[]; nextLink?: string},
-): Promise<T[]> {
-  const items = [...(firstPage.value || [])]
-  let nextLink = firstPage.nextLink
-
-  while (nextLink) {
-    const response = await request(nextLink)
-    if (!response.ok) {
-      throw new Error(`Error al obtener la siguiente página: ${response.status}`)
-    }
-
-    const page = await response.json() as {value?: T[]; nextLink?: string}
-    items.push(...(page.value || []))
-    nextLink = page.nextLink
-  }
-
-  return items
-}
-
-async function getSubscribedProducts(request: RequestFn, userId: string): Promise<Set<string>> {
-  const subscribedProducts = new Set<string>()
-
+async function getSubscribedProducts(client: ApimClient, userId: string): Promise<Set<string>> {
   try {
-    const response = await request(`/users/${encodeURIComponent(userId)}/subscriptions`)
-    if (!response.ok) {
-      return subscribedProducts
-    }
-
-    const json = await response.json() as ApimSubscriptionListResponse
-    const subscriptions = await collectPages(request, json)
-    subscriptions.forEach((subscription) => {
-      const scope = subscription.properties?.scope || ""
-      const productName = scope.split("/products/")[1]
-
-      if (productName) {
-        subscribedProducts.add(productName)
-      }
-    })
+    return getSubscribedProductNames(await client.listUserSubscriptions(userId))
   } catch (exception) {
     console.warn("Error obteniendo suscripciones del usuario", exception)
+    return new Set<string>()
   }
-
-  return subscribedProducts
 }
 
-async function getProductApis(request: RequestFn, productName: string): Promise<ApiItem[]> {
+async function getProductApis(client: ApimClient, productName: string): Promise<ApiItem[]> {
   try {
-    const response = await request(`/products/${encodeURIComponent(productName)}/apis`)
-
-    if (!response.ok) {
-      console.warn(`Error obteniendo APIs del producto ${productName}`)
-      return []
-    }
-
-    const json = await response.json() as ApimApiListResponse
-    const apis = (await collectPages(request, json)).map(mapApi)
+    const apis = (await client.listProductApis(productName)).map(mapApi)
 
     apis.sort((a, b) =>
       a.displayName.localeCompare(b.displayName, "es", {sensitivity: "base"}),
@@ -576,11 +475,11 @@ async function getProductApis(request: RequestFn, productName: string): Promise<
 
 async function mapProduct(
   product: ApimProductRaw,
-  request: RequestFn,
+  client: ApimClient,
   subscribedProducts: Set<string>,
 ): Promise<ProductItem> {
   const properties = product.properties || {}
-  const rawApis = await getProductApis(request, product.name)
+  const rawApis = await getProductApis(client, product.name)
   const apis = groupApisByVersion(rawApis)
   syncSelectedApiVersions(apis)
 
@@ -596,14 +495,14 @@ async function mapProduct(
 }
 
 async function loadProducts(): Promise<void> {
-  if (!secretsPromise || !requestPromise) {
+  if (!secretsPromise || !clientPromise) {
     error.value = "Error: no se pudo inicializar el contexto de APIM"
     loading.value = false
     return
   }
 
   try {
-    const [secrets, request] = await Promise.all([secretsPromise, requestPromise])
+    const [secrets, client] = await Promise.all([secretsPromise, clientPromise])
 
     if (!secrets.userId) {
       isAuthenticated.value = false
@@ -612,18 +511,10 @@ async function loadProducts(): Promise<void> {
 
     isAuthenticated.value = true
 
-    const subscribedProducts = await getSubscribedProducts(request, secrets.userId)
-    const response = await request("/products")
-
-    if (!response.ok) {
-      error.value = `Error al obtener productos: ${response.status}`
-      return
-    }
-
-    const json = await response.json() as ApimProductListResponse
-    const allProducts = await collectPages(request, json)
+    const subscribedProducts = await getSubscribedProducts(client, secrets.userId)
+    const allProducts = await client.listProducts()
     products.value = await Promise.all(
-      allProducts.map((product) => mapProduct(product, request, subscribedProducts)),
+      allProducts.map((product) => mapProduct(product, client, subscribedProducts)),
     )
   } catch (exception) {
     const message = exception instanceof Error ? exception.message : String(exception)
