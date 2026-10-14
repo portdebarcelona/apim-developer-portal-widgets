@@ -26,10 +26,10 @@ jobs:
           dotnet-version: 8.0.x
 
       - name: Restore
-        run: dotnet restore DeveloperPortal.slnx
+        run: dotnet restore apps/developer-portal-bff-tests/DeveloperPortal.Bff.Tests.csproj
 
       - name: Test
-        run: dotnet test DeveloperPortal.slnx --configuration Release --no-restore
+        run: dotnet test apps/developer-portal-bff-tests/DeveloperPortal.Bff.Tests.csproj --configuration Release --no-restore
 
       - name: Publish BFF
         run: >-

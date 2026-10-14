@@ -21,6 +21,8 @@ const configuration = computed<ApiReferenceConfiguration | undefined>(() => {
     localization: {locale: "es"},
     persistAuth: false,
     telemetry: false,
+    agent: {disabled: true},
+    mcp: {disabled: true},
     oauth2RedirectUri: oauth.scalarRedirectUri,
     authentication: oauth.scalarAuthentication,
   } as unknown as ApiReferenceConfiguration

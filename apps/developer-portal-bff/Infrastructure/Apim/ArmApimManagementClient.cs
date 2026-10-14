@@ -101,7 +101,7 @@ public sealed class ArmApimManagementClient : IApimManagementClient
     {
         var path = $"{_options.ServiceResourcePath}/apis/{Escape(apiId)}" +
                    $"?format={Uri.EscapeDataString(_openApiOptions.ExportFormat)}&export=true";
-        var export = await GetJsonAsync(BuildUri(path), true, cancellationToken);
+        using var export = await GetJsonAsync(BuildUri(path), true, cancellationToken);
         var specification = await ResolveExportValueAsync(export.RootElement, cancellationToken);
         return NormalizeOpenApi(specification);
     }
@@ -158,10 +158,20 @@ public sealed class ArmApimManagementClient : IApimManagementClient
         await EnsureSuccessAsync(response, cancellationToken);
         if (response.Content.Headers.ContentLength > _openApiOptions.MaxDocumentBytes)
             throw new InvalidOperationException("APIM OpenAPI export exceeded the configured size limit.");
-        var content = await response.Content.ReadAsStringAsync(cancellationToken);
-        if (Encoding.UTF8.GetByteCount(content) > _openApiOptions.MaxDocumentBytes)
-            throw new InvalidOperationException("APIM OpenAPI export exceeded the configured size limit.");
-        return JsonDocument.Parse(content);
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var content = new MemoryStream();
+        var buffer = new byte[8192];
+        while (true)
+        {
+            var remaining = (long)_openApiOptions.MaxDocumentBytes - content.Length + 1;
+            var read = await stream.ReadAsync(
+                buffer.AsMemory(0, (int)Math.Min(buffer.Length, remaining)), cancellationToken);
+            if (read == 0) break;
+            if (content.Length + read > _openApiOptions.MaxDocumentBytes)
+                throw new InvalidOperationException("APIM OpenAPI export exceeded the configured size limit.");
+            content.Write(buffer, 0, read);
+        }
+        return JsonDocument.Parse(content.ToArray());
     }
 
     private async Task<JsonElement> ResolveExportValueAsync(JsonElement root, CancellationToken cancellationToken)
@@ -293,7 +303,11 @@ public sealed class ArmApimManagementClient : IApimManagementClient
     private static async Task EnsureSuccessAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
         if (response.IsSuccessStatusCode) return;
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        var buffer = new byte[4096];
+        var read = await stream.ReadAtLeastAsync(
+            buffer, buffer.Length, throwOnEndOfStream: false, cancellationToken: cancellationToken);
+        var body = Encoding.UTF8.GetString(buffer, 0, read);
         throw new HttpRequestException(
             $"Azure APIM request failed with status {(int)response.StatusCode}: {body}", null, response.StatusCode);
     }

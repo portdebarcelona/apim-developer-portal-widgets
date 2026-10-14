@@ -93,7 +93,11 @@ else
         });
 }
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options => options.AddPolicy("PortalAccess", policy =>
+    policy.RequireAuthenticatedUser().RequireAssertion(context =>
+        context.User.HasClaim(claim => claim.Type == "scp" &&
+            claim.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Contains("access_as_user", StringComparer.Ordinal)))));
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
 {
     var origins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? ["http://localhost:5173"];
@@ -150,7 +154,7 @@ app.UseAuthorization();
 
 app.MapHealthChecks("/healthz").AllowAnonymous();
 
-var api = app.MapGroup("/api").RequireAuthorization();
+var api = app.MapGroup("/api").RequireAuthorization("PortalAccess");
 
 api.MapGet("/me", async (
     ClaimsPrincipal user,

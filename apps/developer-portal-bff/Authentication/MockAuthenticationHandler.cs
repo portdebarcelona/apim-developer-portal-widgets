@@ -24,7 +24,8 @@ public sealed class MockAuthenticationHandler : AuthenticationHandler<Authentica
             new Claim("oid", "00000000-0000-0000-0000-000000000001"),
             new Claim(ClaimTypes.NameIdentifier, "local-developer"),
             new Claim(ClaimTypes.Name, "Desarrollo local"),
-            new Claim("preferred_username", "developer@localhost")
+            new Claim("preferred_username", "developer@localhost"),
+            new Claim("scp", "access_as_user")
         };
         claims.AddRange((_configuration.GetSection("Authentication:MockRoles").Get<string[]>() ?? [])
             .Where(role => !string.IsNullOrWhiteSpace(role))
