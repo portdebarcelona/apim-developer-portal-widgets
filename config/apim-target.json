@@ -1,0 +1,9 @@
+{
+  "serviceName": "apim-cmn-core",
+  "resourceGroup": "rg-common-core",
+  "subscriptionId": "8b72e64a-ae1a-4ac3-9960-dda8ee63d59e",
+  "tenantId": "3b6f65fd-e602-4e25-a81a-eb5ef7376512",
+  "documentationClientId": "76e21c21-a10d-45c2-ac0f-3d4e240a228c",
+  "portalUrl": "https://apim-cmn-core.developer.azure-api.net/",
+  "gatewayUrl": "https://apim-cmn-core.azure-api.net/"
+}

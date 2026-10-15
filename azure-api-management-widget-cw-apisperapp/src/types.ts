@@ -1,39 +1,11 @@
-export interface ApimWidgetSecrets {
-  managementApiUrl: string
-  apiVersion: string
-  token?: string
-}
-
-export interface ApimApiRaw {
-  id?: string
-  name: string
-  properties?: {
-    displayName?: string
-    description?: string
-    apiVersion?: string
-    apiRevision?: string
-    apiVersionSetId?: string
-  }
-}
-
-export interface ApimTagRaw {
-  name?: string
-  properties?: {
-    displayName?: string
-  }
-}
-
-export interface ApimListResponse<T> {
-  value?: T[]
-  nextLink?: string
-}
-
-export interface LatestApiCandidate {
-  api: ApimApiRaw
-  label: string
-  groupKey: string
-  displayName: string
-}
+export type {
+  ApimApiRaw,
+  ApimListResponse,
+  ApimTagRaw,
+  ApimWidgetSecrets,
+  RequestFn,
+  ViewMode,
+} from "@portdebarcelona/apim-core"
 
 export interface ApplicationApiVersion {
   id: string
@@ -56,6 +28,3 @@ export interface ApplicationGroupRow {
   apis: ApplicationApiItem[]
   apiCount: number
 }
-
-export type RequestFn = (pathOrUrl: string) => Promise<Response>
-export type ViewMode = "table" | "cards"
