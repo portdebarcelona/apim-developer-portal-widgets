@@ -1,21 +1,19 @@
-import {
-  createPortalConfig,
-  openApiDocumentation,
-  type DocumentationTarget,
-} from "@portdebarcelona/apim-core"
+export function openApi(apiName: string | null | undefined, route: string): void {
+  const encodedApiName = encodeURIComponent(apiName ?? "")
+  let url = `/${route}#api=${encodedApiName}`
 
-const config = createPortalConfig(import.meta.env)
+  try {
+    url = `${window.parent.location.origin}/${route}#api=${encodedApiName}`
+  } catch {
+    // Keep the relative fallback when the parent window cannot be accessed.
+  }
 
-export function openApi(
-  apiName: string | null | undefined,
-  route: string,
-  apiVersion?: string,
-): void {
-  openApiDocumentation(toTarget(route), {apiName: apiName || "", apiVersion}, config)
-}
+  const opened = window.open(url, "_blank")
 
-function toTarget(route: string): DocumentationTarget {
-  if (route === "custom-api-details") return "scalar"
-  if (route === "custom-apis-swagger") return "swagger"
-  return "native"
+  if (opened) {
+    opened.opener = null
+    return
+  }
+
+  window.location.href = url
 }
