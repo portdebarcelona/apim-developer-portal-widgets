@@ -1,17 +1,11 @@
 # Dependencies and generated builds
 **/node_modules/
 **/dist/
-**/bin/
-**/obj/
-/artifacts/
-*.zip
 
 # Local environment and credentials
 .env
 .env.*
 !.env.example
-!.env.local-pre.example
-!.env.local-pre-mock.example
 *.local
 
 # Logs and editor files
