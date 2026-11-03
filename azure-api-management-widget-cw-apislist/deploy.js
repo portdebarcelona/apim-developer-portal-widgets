@@ -1,13 +1,8 @@
 const {deployNodeJS} = require("@azure/api-management-custom-widgets-tools")
-const target = require("../config/apim-target.json")
-
-const subscriptionId = process.env.APIM_SUBSCRIPTION_ID || target.subscriptionId
-const resourceGroup = process.env.APIM_RESOURCE_GROUP || target.resourceGroup
-const serviceName = process.env.APIM_SERVICE_NAME || target.serviceName
 
 const serviceInformation = {
-	"resourceId": `subscriptions/${subscriptionId}/resourceGroups/${resourceGroup}/providers/Microsoft.ApiManagement/service/${serviceName}`,
-	"managementApiEndpoint": process.env.AZURE_MANAGEMENT_API_ENDPOINT || "https://management.azure.com"
+	"resourceId": "subscriptions/1b2f2b67-bfca-4ccc-87ee-f887cf98d217/resourceGroups/rg-common/providers/Microsoft.ApiManagement/service/apbapipre",
+	"managementApiEndpoint": "https://management.azure.com"
 }
 const name = "cw-apislist"
 const fallbackConfigPath = "./static/config.msapim.json"

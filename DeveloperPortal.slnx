@@ -1,4 +1,0 @@
-<Solution>
-  <Project Path="apps/developer-portal-bff/DeveloperPortal.Bff.csproj" />
-  <Project Path="apps/developer-portal-bff-tests/DeveloperPortal.Bff.Tests.csproj" />
-</Solution>
