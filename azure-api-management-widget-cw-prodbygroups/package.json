@@ -2,6 +2,9 @@
   "name": "cw-prodbygroups",
   "private": true,
   "version": "0.1.0",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "start": "vite",
     "host": "vite --host",
@@ -10,14 +13,14 @@
     "deploy": "npm run build && node deploy.js"
   },
   "dependencies": {
-    "@azure/api-management-custom-widgets-tools": "^1.0.0-beta.2",
-    "vue": "^3.2.37"
+    "@azure/api-management-custom-widgets-tools": "^1.0.0-beta.3",
+    "vue": "^3.5.44"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^6.0.7",
+    "@vitejs/plugin-vue": "^6.0.10",
     "prettier": "^2.7.1",
-    "sass": "^1.54.4",
+    "sass": "^1.107.1",
     "typescript": "^4.7.4",
-    "vite": "^8.0.16"
+    "vite": "^8.3.5"
   }
 }
