@@ -1,0 +1,16 @@
+{
+  "name": "apim-documentation-widgets",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "workspaces": ["azure-api-management-widget-cw-api-documentation", "azure-api-management-widget-cw-api-documentation-swagger"],
+  "engines": {"node": ">=22.12.0"},
+  "overrides": {"@swagger-api/apidom-reference": {"minimatch": "11.0.1"}},
+  "scripts": {
+    "test": "vitest run",
+    "test:browser": "playwright test",
+    "build": "npm run build --workspaces",
+    "verify:backups": "node scripts/verify-backups.cjs"
+  },
+  "devDependencies": {"@playwright/test": "1.65.1", "vitest": "5.1.1", "typescript": "5.9.3", "@types/node": "24.10.1"}
+}
